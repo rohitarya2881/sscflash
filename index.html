@@ -72,7 +72,10 @@ a{color:var(--acc);cursor:pointer;text-decoration:none}
 .back{background:linear-gradient(145deg,#153a31,#12261f);transform:rotateY(180deg)}
 .face small{color:var(--mute)}
 .ctrl{display:flex;justify-content:center;gap:12px;margin-top:16px}
-.ctrl button{min-width:84px;font-size:20px}
+.ctrl button{min-width:72px;font-size:20px}
+.revrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:12px}
+.revrow b{color:var(--green);font-size:18px}
+.revbadge{font-size:12px;color:var(--green)}
 @media (max-width:560px){
   .filters{grid-template-columns:1fr 1fr}
   .filters input{grid-column:1/3}
@@ -85,8 +88,8 @@ a{color:var(--acc);cursor:pointer;text-decoration:none}
 
 <script>
 // ====== 1) PUT YOUR SUPABASE DETAILS HERE ======
-const SUPABASE_URL = 'https://pwitkqitmnbjgvlsjhpk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_wzN4AsKit4hNT2nPpfzNDA_J7Q_L9NQ';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 // ===============================================
 
 const configured = !SUPABASE_URL.startsWith('YOUR') && !SUPABASE_ANON_KEY.startsWith('YOUR');
@@ -161,15 +164,35 @@ function pathOf(id) {
   return p;
 }
 
-// Tolerant JSON parser (also fixes a missing closing bracket / trailing comma)
+// Fallback for broken JSON: pull out every {...} object, or rebuild objects from bare "question": ... pairs
+function salvage(t) {
+  const out = []; let depth = 0, start = -1, inStr = false, bs = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (inStr) { if (bs) bs = false; else if (ch === '\\') bs = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') { if (depth === 0) start = i; depth++; }
+    else if (ch === '}' && depth > 0) {
+      depth--;
+      if (depth === 0) { try { out.push(JSON.parse(t.slice(start, i + 1))); } catch (_) {} }
+    }
+  }
+  const n = (t.match(/"question"\s*:/g) || []).length;
+  if (out.length && out.length >= n) return out;
+  const alt = [];
+  const parts = t.split(/(?="question"\s*:)/).map(s => s.trim().replace(/^[\[\]{},\s]+|[\[\]{},\s]+$/g, '')).filter(Boolean);
+  for (const p of parts) { try { alt.push(JSON.parse('{' + p + '}')); } catch (_) {} }
+  return alt.length > out.length ? alt : out;
+}
+
+// Tolerant JSON parser
 function parseCards(text) {
-  let t = text.trim(), data;
+  let t = text.replace(/^﻿/, '').trim(), data;
   if (!t) throw new Error('Paste some JSON first');
   try { data = JSON.parse(t); }
   catch (e) {
-    let r = t.replace(/,\s*$/, '');
-    if (r.startsWith('[') && !r.endsWith(']')) r += ']';
-    try { data = JSON.parse(r); } catch (e2) { throw new Error('Invalid JSON: ' + e.message); }
+    data = salvage(t);
+    if (!data.length) throw new Error('Could not read JSON: ' + e.message);
   }
   if (!Array.isArray(data)) data = Array.isArray(data?.questions) ? data.questions : [data];
   const cards = data.map(x => ({
@@ -254,6 +277,7 @@ function renderBrowser() {
       <div class="item" data-act="open" data-id="${n.id}">
         <div class="ico">${n.type === 'folder' ? '📁' : '📄'}</div>
         <div class="nm">${esc(n.name)}</div>
+        ${n.type === 'file' && n.revision_count ? `<div class="revbadge">🔁 revised ${n.revision_count}×</div>` : ''}
         <div class="acts">
           <button class="icon" data-act="rename" data-id="${n.id}" title="Rename">✎</button>
           <button class="icon" data-act="del" data-id="${n.id}" title="Delete">🗑</button>
@@ -282,6 +306,13 @@ function renderCards() {
       ${isFile ? `<button class="ghost" data-act="addJson">+ Add JSON</button>` : ''}
       <button data-act="study">▶ Flashcards</button>
     </div>
+    ${isFile ? `<div class="revrow">
+      <span>🔁 Revised <b>${file?.revision_count || 0}</b> time${(file?.revision_count || 0) === 1 ? '' : 's'}</span>
+      <span class="mute">${file?.last_revised_at ? 'last: ' + new Date(file.last_revised_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span>
+      <span class="sp"></span>
+      <button class="ghost" data-act="unrevise" title="Undo one revision">−1</button>
+      <button data-act="revise">✅ Mark revised</button>
+    </div>` : ''}
     <div class="filters">
       <input id="fq" placeholder="Search question or answer…" value="${esc(state.filters.q)}">
       <select id="fp"><option value="all">All priorities</option>
@@ -308,6 +339,7 @@ function updateList() {
         ${state.scope === 'bookmarks' ? `<span class="src">${esc(c.nodes?.name || '')}</span>` : ''}
         <span class="sp"></span>
         <button class="icon ${c.bookmarked ? 'star' : ''}" data-act="bm" data-id="${c.id}">${c.bookmarked ? '★' : '☆'}</button>
+        <button class="icon" data-act="editcard" data-id="${c.id}" title="Edit">✎</button>
         <button class="icon" data-act="delcard" data-id="${c.id}">🗑</button>
       </div>
       <div class="q" data-act="reveal">${esc(c.question)}</div>
@@ -334,6 +366,7 @@ function renderStudy() {
     <div class="ctrl">
       <button class="ghost" data-act="prev">◀</button>
       <button class="ghost ${c.bookmarked ? 'star' : ''}" data-act="sbm">${c.bookmarked ? '★' : '☆'}</button>
+      <button class="ghost" data-act="sedit" title="Edit card">✎</button>
       <button class="ghost" data-act="next">▶</button>
     </div>
     <p class="mute" style="text-align:center">Swipe left/right on phone • Keys: ← → Space B</p>
@@ -358,6 +391,23 @@ async function toggleBookmark(c) {
   c.bookmarked = !c.bookmarked;
   const { error } = await sb.from('cards').update({ bookmarked: c.bookmarked }).eq('id', c.id);
   if (error) { c.bookmarked = !c.bookmarked; toast(error.message); }
+}
+
+function editCard(c, done) {
+  const prios = [...new Set(state.cards.map(x => x.priority))];
+  modal('Edit card', `<label>Question</label><textarea id="eq" style="min-height:90px">${esc(c.question)}</textarea>
+    <label>Answer</label><textarea id="ea" style="min-height:110px">${esc(c.answer)}</textarea>
+    <label>Priority</label><input id="ep" list="plist" value="${esc(c.priority)}">
+    <datalist id="plist">${prios.map(p => `<option value="${esc(p)}">`).join('')}</datalist>`, async o => {
+    const question = o.querySelector('#eq').value.trim();
+    const answer = o.querySelector('#ea').value.trim();
+    const priority = o.querySelector('#ep').value.trim().toLowerCase() || 'normal';
+    if (!question || !answer) throw new Error('Question and answer cannot be empty');
+    const { error } = await sb.from('cards').update({ question, answer, priority }).eq('id', c.id);
+    if (error) throw error;
+    Object.assign(c, { question, answer, priority });
+    done();
+  });
 }
 
 function newFolder() {
@@ -450,6 +500,21 @@ document.addEventListener('click', async e => {
       await toggleBookmark(c);
       if (state.scope === 'bookmarks' && !c.bookmarked) state.cards = state.cards.filter(x => x.id !== id);
       updateList(); break;
+    }
+    case 'editcard': editCard(state.cards.find(x => x.id === id), () => renderCards()); break;
+    case 'sedit': editCard(state.study.list[state.study.i], () => renderStudy()); break;
+    case 'revise':
+    case 'unrevise': {
+      const f = state.nodes.find(n => n.id === state.fileId); if (!f) break;
+      const cur = f.revision_count || 0, cnt = Math.max(0, cur + (act === 'revise' ? 1 : -1));
+      if (cnt === cur) break;
+      const patch = { revision_count: cnt };
+      if (act === 'revise') patch.last_revised_at = new Date().toISOString();
+      const { error } = await sb.from('nodes').update(patch).eq('id', f.id);
+      if (error) { toast(error.message); break; }
+      Object.assign(f, patch); renderCards();
+      toast(act === 'revise' ? `Revision #${cnt} saved 🔁` : `Revision count: ${cnt}`);
+      break;
     }
     case 'delcard':
       if (confirm('Delete this card?')) {
