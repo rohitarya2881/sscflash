@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FlashFolders</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0f1220; --panel:#181c30; --panel2:#20253d; --line:#2b3150; --txt:#e8eaf6; --mute:#8b92b8;
+  --acc:#6c8cff; --acc2:#4f6ef0; --red:#ff6b7a; --green:#4ad39a; --gold:#ffc94a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px;padding:10px 14px;background:var(--acc2);color:#fff}
+button:hover{filter:brightness(1.1)}
+button:disabled{opacity:.5;cursor:default}
+button.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+button.icon{padding:6px 10px;background:transparent;color:var(--mute);font-size:18px}
+button.icon:hover{color:var(--txt)}
+input,textarea,select{font:inherit;width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--acc)}
+textarea{min-height:200px;resize:vertical;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+a{color:var(--acc);cursor:pointer;text-decoration:none}
+.hidden{display:none!important}
+.wrap{max-width:980px;margin:0 auto;padding:14px 14px 80px}
+.topbar{display:flex;align-items:center;gap:10px;padding:10px 0 14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.brand{font-weight:700;font-size:20px}
+.sp{flex:1}
+.mute{color:var(--mute);font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row.end{justify-content:flex-end;margin-top:14px}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 12px;font-size:15px}
+.crumbs span{color:var(--mute)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 10px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;min-height:120px}
+.item:hover{border-color:var(--acc)}
+.ico{font-size:40px;line-height:1}
+.nm{font-size:14px;text-align:center;word-break:break-word;flex:1;display:flex;align-items:center}
+.acts{display:flex;gap:2px}
+.empty{text-align:center;color:var(--mute);padding:50px 10px}
+.auth{max-width:380px;margin:12vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px}
+.auth h1{margin:0 0 4px;font-size:26px}
+.auth form{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.filters{display:grid;grid-template-columns:1fr 160px auto;gap:8px;margin:12px 0}
+.chip{background:var(--panel2);border:1px solid var(--line);color:var(--txt);white-space:nowrap}
+.chip.on{background:var(--gold);color:#222;border-color:var(--gold)}
+.qcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.qcard.bm{border-color:var(--gold)}
+.qtop{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.q{font-weight:600;cursor:pointer;line-height:1.4}
+.a{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);color:#cfe3d9;line-height:1.5}
+.badge{font-size:11px;padding:3px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.4px}
+.badge.hi{background:#ff6b7a22;color:var(--red)}
+.badge.md{background:#6c8cff22;color:var(--acc)}
+.badge.lo{background:#8b92b822;color:var(--mute)}
+.src{font-size:12px;color:var(--mute)}
+.star{color:var(--gold)!important}
+.overlay{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;padding:14px;z-index:50}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;width:100%;max-width:520px;max-height:92vh;overflow:auto}
+.modal h3{margin:0 0 12px}
+.modal label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000d;border:1px solid var(--line);padding:10px 16px;border-radius:10px;z-index:99;max-width:90vw}
+/* study */
+.studybar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.scene{perspective:1200px;height:min(58vh,440px);min-height:300px}
+.flip{position:relative;width:100%;height:100%;transition:transform .5s;transform-style:preserve-3d;cursor:pointer}
+.flip.on{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:20px;padding:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:auto;border:1px solid var(--line)}
+.face p{margin:10px 0;font-size:clamp(18px,3.2vw,28px);line-height:1.45}
+.front{background:linear-gradient(145deg,#1d2347,#161a33)}
+.back{background:linear-gradient(145deg,#153a31,#12261f);transform:rotateY(180deg)}
+.face small{color:var(--mute)}
+.ctrl{display:flex;justify-content:center;gap:12px;margin-top:16px}
+.ctrl button{min-width:84px;font-size:20px}
+@media (max-width:560px){
+  .filters{grid-template-columns:1fr 1fr}
+  .filters input{grid-column:1/3}
+  .grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ====== 1) PUT YOUR SUPABASE DETAILS HERE ======
+const SUPABASE_URL = 'https://pwitkqitmnbjgvlsjhpk.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_wzN4AsKit4hNT2nPpfzNDA_J7Q_L9NQ';
+// ===============================================
+
+const configured = !SUPABASE_URL.startsWith('YOUR') && !SUPABASE_ANON_KEY.startsWith('YOUR');
+const sb = configured ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+const $app = document.getElementById('app');
+const state = {
+  user: null, view: 'auth', authMode: 'login',
+  nodes: [], folderId: null,
+  fileId: null, scope: 'file', cards: [],
+  filters: { q: '', priority: 'all', bm: false },
+  study: null, prevView: 'file'
+};
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pcls = p => p === 'important' || p === 'high' ? 'hi' : (/less|low/.test(p) ? 'lo' : 'md');
+
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+function modal(title, body, onOk, okText = 'Save') {
+  const o = document.createElement('div');
+  o.className = 'overlay';
+  o.innerHTML = `<div class="modal"><h3>${title}</h3>${body}<div class="row end"><button class="ghost" data-x>Cancel</button><button data-ok>${okText}</button></div></div>`;
+  document.body.appendChild(o);
+  const close = () => o.remove();
+  o.querySelector('[data-x]').onclick = close;
+  o.addEventListener('mousedown', e => { if (e.target === o) close(); });
+  const ok = o.querySelector('[data-ok]');
+  ok.onclick = async () => {
+    ok.disabled = true;
+    try { await onOk(o); close(); } catch (e) { toast(e.message || String(e)); ok.disabled = false; }
+  };
+  const f = o.querySelector('input,textarea');
+  if (f) f.focus();
+  return o;
+}
+
+// ---------- data helpers ----------
+async function fetchAll(make) {
+  let all = [], from = 0; const step = 1000;
+  while (true) {
+    const { data, error } = await make().range(from, from + step - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < step) break;
+    from += step;
+  }
+  return all;
+}
+async function loadNodes() {
+  try { state.nodes = await fetchAll(() => sb.from('nodes').select('*').order('created_at')); }
+  catch (e) { toast(e.message); }
+}
+async function loadFileCards() {
+  try { state.cards = await fetchAll(() => sb.from('cards').select('*').eq('file_id', state.fileId).order('position')); }
+  catch (e) { toast(e.message); state.cards = []; }
+}
+async function loadBookmarks() {
+  try { state.cards = await fetchAll(() => sb.from('cards').select('*, nodes(name)').eq('bookmarked', true).order('created_at')); }
+  catch (e) { toast(e.message); state.cards = []; }
+}
+const kids = pid => state.nodes.filter(n => n.parent_id === pid).sort((a, b) =>
+  a.type === b.type ? a.name.localeCompare(b.name) : (a.type === 'folder' ? -1 : 1));
+function pathOf(id) {
+  const p = []; let n = state.nodes.find(x => x.id === id);
+  while (n) { p.unshift(n); n = state.nodes.find(x => x.id === n.parent_id); }
+  return p;
+}
+
+// Tolerant JSON parser (also fixes a missing closing bracket / trailing comma)
+function parseCards(text) {
+  let t = text.trim(), data;
+  if (!t) throw new Error('Paste some JSON first');
+  try { data = JSON.parse(t); }
+  catch (e) {
+    let r = t.replace(/,\s*$/, '');
+    if (r.startsWith('[') && !r.endsWith(']')) r += ']';
+    try { data = JSON.parse(r); } catch (e2) { throw new Error('Invalid JSON: ' + e.message); }
+  }
+  if (!Array.isArray(data)) data = Array.isArray(data?.questions) ? data.questions : [data];
+  const cards = data.map(x => ({
+    question: String(x.question ?? x.q ?? '').trim(),
+    answer: String(x.answer ?? x.a ?? '').trim(),
+    priority: String(x.priority ?? 'normal').trim().toLowerCase() || 'normal'
+  })).filter(c => c.question && c.answer);
+  if (!cards.length) throw new Error('No valid cards found (each needs question and answer)');
+  return cards;
+}
+async function insertCards(fileId, cards, startPos = 0) {
+  const rows = cards.map((c, i) => ({ ...c, file_id: fileId, position: startPos + i }));
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await sb.from('cards').insert(rows.slice(i, i + 500));
+    if (error) throw error;
+  }
+}
+
+// ---------- auth ----------
+async function doAuth(mode, email, password) {
+  if (mode === 'signup') {
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) return toast(error.message);
+    if (!data.session) toast('Account created. Confirm the email, then log in.');
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) toast(error.message);
+  }
+}
+
+// ---------- views ----------
+function render() {
+  if (!configured) {
+    $app.innerHTML = `<div class="auth"><h1>Setup needed</h1><p class="mute">Open index.html and put your Supabase URL and anon key at the top of the script.</p></div>`;
+    return;
+  }
+  if (state.view === 'auth') return renderAuth();
+  if (state.view === 'browser') return renderBrowser();
+  if (state.view === 'study') return renderStudy();
+  return renderCards();
+}
+
+function renderAuth() {
+  const su = state.authMode === 'signup';
+  $app.innerHTML = `<div class="auth">
+    <h1>🗂️ FlashFolders</h1>
+    <div class="mute">${su ? 'Create your account' : 'Log in to continue'}</div>
+    <form id="authForm">
+      <input id="em" type="email" placeholder="Email" autocomplete="email" required>
+      <input id="pw" type="password" placeholder="Password (min 6 chars)" autocomplete="${su ? 'new-password' : 'current-password'}" minlength="6" required>
+      <button type="submit">${su ? 'Create account' : 'Log in'}</button>
+    </form>
+    <p class="mute" style="margin-top:14px">${su ? 'Already have an account?' : 'New here?'}
+      <a data-act="toggleAuth">${su ? 'Log in' : 'Create account'}</a></p>
+  </div>`;
+  document.getElementById('authForm').onsubmit = async e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button'); btn.disabled = true;
+    await doAuth(state.authMode, $app.querySelector('#em').value.trim(), $app.querySelector('#pw').value);
+    btn.disabled = false;
+  };
+}
+
+function topbar(extra = '') {
+  return `<div class="topbar"><div class="brand">🗂️ FlashFolders</div><div class="sp"></div>${extra}
+    <span class="mute">${esc(state.user?.email || '')}</span><button class="ghost" data-act="logout">Logout</button></div>`;
+}
+
+function renderBrowser() {
+  const path = pathOf(state.folderId);
+  const crumbs = [`<a data-act="go" data-id="">🏠 Root</a>`]
+    .concat(path.map(n => `<span>›</span><a data-act="go" data-id="${n.id}">${esc(n.name)}</a>`)).join('');
+  const items = kids(state.folderId);
+  $app.innerHTML = `<div class="wrap">${topbar()}
+    <div class="row">
+      <button data-act="newFolder">📁 New folder</button>
+      <button data-act="newFile">📄 New file</button>
+      <button class="ghost" data-act="showBookmarks">⭐ Bookmarks</button>
+    </div>
+    <div class="crumbs">${crumbs}</div>
+    ${items.length ? `<div class="grid">${items.map(n => `
+      <div class="item" data-act="open" data-id="${n.id}">
+        <div class="ico">${n.type === 'folder' ? '📁' : '📄'}</div>
+        <div class="nm">${esc(n.name)}</div>
+        <div class="acts">
+          <button class="icon" data-act="rename" data-id="${n.id}" title="Rename">✎</button>
+          <button class="icon" data-act="del" data-id="${n.id}" title="Delete">🗑</button>
+        </div>
+      </div>`).join('')}</div>` : `<div class="empty">This folder is empty.<br>Create a folder or a file (paste your JSON in it).</div>`}
+  </div>`;
+}
+
+function applyFilters(cards) {
+  const f = state.filters, q = f.q.toLowerCase();
+  return cards.filter(c =>
+    (f.priority === 'all' || c.priority === f.priority) &&
+    (!f.bm || c.bookmarked) &&
+    (!q || c.question.toLowerCase().includes(q) || c.answer.toLowerCase().includes(q)));
+}
+
+function renderCards() {
+  const isFile = state.scope === 'file';
+  const file = state.nodes.find(n => n.id === state.fileId);
+  const prios = [...new Set(state.cards.map(c => c.priority))];
+  $app.innerHTML = `<div class="wrap">${topbar()}
+    <div class="row">
+      <button class="ghost" data-act="back">← Back</button>
+      <h2 style="margin:0;font-size:20px">${isFile ? '📄 ' + esc(file?.name || '') : '⭐ Bookmarked cards'}</h2>
+      <span class="sp"></span>
+      ${isFile ? `<button class="ghost" data-act="addJson">+ Add JSON</button>` : ''}
+      <button data-act="study">▶ Flashcards</button>
+    </div>
+    <div class="filters">
+      <input id="fq" placeholder="Search question or answer…" value="${esc(state.filters.q)}">
+      <select id="fp"><option value="all">All priorities</option>
+        ${prios.map(p => `<option value="${esc(p)}" ${state.filters.priority === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>
+      ${isFile ? `<button class="chip ${state.filters.bm ? 'on' : ''}" id="fb">⭐ Only bookmarked</button>` : ''}
+    </div>
+    <div class="mute" id="count" style="margin-bottom:8px"></div>
+    <div id="list"></div>
+  </div>`;
+  $app.querySelector('#fq').oninput = e => { state.filters.q = e.target.value; updateList(); };
+  $app.querySelector('#fp').onchange = e => { state.filters.priority = e.target.value; updateList(); };
+  const fb = $app.querySelector('#fb');
+  if (fb) fb.onclick = () => { state.filters.bm = !state.filters.bm; fb.classList.toggle('on', state.filters.bm); updateList(); };
+  updateList();
+}
+
+function updateList() {
+  const list = applyFilters(state.cards);
+  $app.querySelector('#count').textContent = `${list.length} of ${state.cards.length} cards`;
+  $app.querySelector('#list').innerHTML = list.length ? list.map(c => `
+    <div class="qcard ${c.bookmarked ? 'bm' : ''}">
+      <div class="qtop">
+        <span class="badge ${pcls(c.priority)}">${esc(c.priority)}</span>
+        ${state.scope === 'bookmarks' ? `<span class="src">${esc(c.nodes?.name || '')}</span>` : ''}
+        <span class="sp"></span>
+        <button class="icon ${c.bookmarked ? 'star' : ''}" data-act="bm" data-id="${c.id}">${c.bookmarked ? '★' : '☆'}</button>
+        <button class="icon" data-act="delcard" data-id="${c.id}">🗑</button>
+      </div>
+      <div class="q" data-act="reveal">${esc(c.question)}</div>
+      <div class="a hidden">${esc(c.answer)}</div>
+    </div>`).join('') : `<div class="empty">No cards match.</div>`;
+}
+
+function renderStudy() {
+  const s = state.study, c = s.list[s.i];
+  $app.innerHTML = `<div class="wrap">
+    <div class="studybar">
+      <button class="ghost" data-act="exit">✕ Exit</button>
+      <span class="sp"></span>
+      <b>${s.i + 1} / ${s.list.length}</b>
+      <span class="sp"></span>
+      <button class="ghost" data-act="shuffle">🔀 Shuffle</button>
+    </div>
+    <div class="scene" id="scene">
+      <div class="flip ${s.flipped ? 'on' : ''}" data-act="flip">
+        <div class="face front"><span class="badge ${pcls(c.priority)}">${esc(c.priority)}</span><p>${esc(c.question)}</p><small>Tap card to see answer</small></div>
+        <div class="face back"><p>${esc(c.answer)}</p><small>Tap to flip back</small></div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <button class="ghost" data-act="prev">◀</button>
+      <button class="ghost ${c.bookmarked ? 'star' : ''}" data-act="sbm">${c.bookmarked ? '★' : '☆'}</button>
+      <button class="ghost" data-act="next">▶</button>
+    </div>
+    <p class="mute" style="text-align:center">Swipe left/right on phone • Keys: ← → Space B</p>
+  </div>`;
+  let x0 = null;
+  const sc = document.getElementById('scene');
+  sc.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  sc.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 60) { dx < 0 ? move(1) : move(-1); e.preventDefault(); }
+  });
+}
+function move(d) {
+  const s = state.study;
+  s.i = (s.i + d + s.list.length) % s.list.length;
+  s.flipped = false; renderStudy();
+}
+
+// ---------- actions ----------
+async function toggleBookmark(c) {
+  c.bookmarked = !c.bookmarked;
+  const { error } = await sb.from('cards').update({ bookmarked: c.bookmarked }).eq('id', c.id);
+  if (error) { c.bookmarked = !c.bookmarked; toast(error.message); }
+}
+
+function newFolder() {
+  modal('New folder', `<label>Folder name</label><input id="nm" placeholder="e.g. Geography">`, async o => {
+    const name = o.querySelector('#nm').value.trim(); if (!name) throw new Error('Enter a name');
+    const { error } = await sb.from('nodes').insert({ type: 'folder', name, parent_id: state.folderId });
+    if (error) throw error;
+    await loadNodes(); render();
+  }, 'Create');
+}
+
+function newFile() {
+  modal('New file', `<label>File name</label><input id="nm" placeholder="e.g. Minerals">
+    <label>Paste JSON (array of {question, answer, priority})</label><textarea id="js" placeholder='[{"question":"...","answer":"...","priority":"important"}]'></textarea>
+    <label>…or choose a .json file</label><input id="fl" type="file" accept=".json,application/json,text/plain">`, async o => {
+    const name = o.querySelector('#nm').value.trim(); if (!name) throw new Error('Enter a file name');
+    const txt = o.querySelector('#js').value;
+    const cards = txt.trim() ? parseCards(txt) : [];
+    const { data, error } = await sb.from('nodes').insert({ type: 'file', name, parent_id: state.folderId }).select().single();
+    if (error) throw error;
+    if (cards.length) await insertCards(data.id, cards, 0);
+    await loadNodes(); render();
+    toast(cards.length ? `File created with ${cards.length} cards` : 'Empty file created');
+  }, 'Create').querySelector('#fl').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const modalEl = e.target.closest('.modal');
+    modalEl.querySelector('#js').value = await f.text();
+    const nm = modalEl.querySelector('#nm'); if (!nm.value) nm.value = f.name.replace(/\.[^.]+$/, '');
+  };
+}
+
+function addJson() {
+  modal('Add cards to this file', `<label>Paste JSON</label><textarea id="js"></textarea>
+    <label>…or choose a .json file</label><input id="fl" type="file" accept=".json,application/json,text/plain">`, async o => {
+    const cards = parseCards(o.querySelector('#js').value);
+    const start = state.cards.reduce((m, c) => Math.max(m, c.position), -1) + 1;
+    await insertCards(state.fileId, cards, start);
+    await loadFileCards(); render();
+    toast(`${cards.length} cards added`);
+  }, 'Add').querySelector('#fl').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    e.target.closest('.modal').querySelector('#js').value = await f.text();
+  };
+}
+
+async function openFile(id) {
+  state.fileId = id; state.scope = 'file';
+  state.filters = { q: '', priority: 'all', bm: false };
+  await loadFileCards(); state.view = 'file'; render();
+}
+
+document.addEventListener('click', async e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const act = el.dataset.act, id = el.dataset.id;
+  const node = id ? state.nodes.find(n => n.id === id) : null;
+  switch (act) {
+    case 'toggleAuth': state.authMode = state.authMode === 'login' ? 'signup' : 'login'; renderAuth(); break;
+    case 'logout': await sb.auth.signOut(); break;
+    case 'go': state.folderId = id || null; render(); break;
+    case 'open':
+      if (!node) break;
+      if (node.type === 'folder') { state.folderId = node.id; render(); } else openFile(node.id);
+      break;
+    case 'newFolder': newFolder(); break;
+    case 'newFile': newFile(); break;
+    case 'rename':
+      modal('Rename', `<input id="nm" value="${esc(node.name)}">`, async o => {
+        const name = o.querySelector('#nm').value.trim(); if (!name) throw new Error('Enter a name');
+        const { error } = await sb.from('nodes').update({ name }).eq('id', node.id);
+        if (error) throw error;
+        await loadNodes(); render();
+      });
+      break;
+    case 'del':
+      if (confirm(`Delete "${node.name}"${node.type === 'folder' ? ' and everything inside it' : ' and all its cards'}?`)) {
+        const { error } = await sb.from('nodes').delete().eq('id', node.id);
+        if (error) toast(error.message); else { await loadNodes(); render(); }
+      }
+      break;
+    case 'showBookmarks':
+      state.scope = 'bookmarks'; state.fileId = null;
+      state.filters = { q: '', priority: 'all', bm: false };
+      await loadBookmarks(); state.view = 'file'; render();
+      break;
+    case 'back': state.view = 'browser'; render(); break;
+    case 'addJson': addJson(); break;
+    case 'reveal': el.nextElementSibling.classList.toggle('hidden'); break;
+    case 'bm': {
+      const c = state.cards.find(x => x.id === id);
+      await toggleBookmark(c);
+      if (state.scope === 'bookmarks' && !c.bookmarked) state.cards = state.cards.filter(x => x.id !== id);
+      updateList(); break;
+    }
+    case 'delcard':
+      if (confirm('Delete this card?')) {
+        const { error } = await sb.from('cards').delete().eq('id', id);
+        if (error) toast(error.message); else { state.cards = state.cards.filter(x => x.id !== id); updateList(); }
+      }
+      break;
+    case 'study': {
+      const list = applyFilters(state.cards);
+      if (!list.length) { toast('No cards match the current filters'); break; }
+      state.study = { list: [...list], i: 0, flipped: false };
+      state.view = 'study'; render(); break;
+    }
+    case 'flip': state.study.flipped = !state.study.flipped; el.classList.toggle('on', state.study.flipped); break;
+    case 'next': move(1); break;
+    case 'prev': move(-1); break;
+    case 'sbm': await toggleBookmark(state.study.list[state.study.i]); renderStudy(); break;
+    case 'shuffle': {
+      const s = state.study;
+      for (let i = s.list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [s.list[i], s.list[j]] = [s.list[j], s.list[i]]; }
+      s.i = 0; s.flipped = false; renderStudy(); break;
+    }
+    case 'exit':
+      state.view = 'file';
+      if (state.scope === 'bookmarks') await loadBookmarks();
+      render(); break;
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (state.view !== 'study' || e.target.matches('input,textarea,select')) return;
+  if (e.key === 'ArrowRight') move(1);
+  else if (e.key === 'ArrowLeft') move(-1);
+  else if (e.key === ' ') { e.preventDefault(); state.study.flipped = !state.study.flipped; document.querySelector('.flip').classList.toggle('on', state.study.flipped); }
+  else if (e.key.toLowerCase() === 'b') toggleBookmark(state.study.list[state.study.i]).then(renderStudy);
+  else if (e.key === 'Escape') document.querySelector('[data-act="exit"]').click();
+});
+
+// ---------- init ----------
+(async () => {
+  if (!configured) return render();
+  const { data } = await sb.auth.getSession();
+  state.user = data.session?.user || null;
+  if (state.user) await loadNodes();
+  state.view = state.user ? 'browser' : 'auth';
+  render();
+  sb.auth.onAuthStateChange(async (_ev, session) => {
+    const u = session?.user || null;
+    if (u?.id === state.user?.id) return;
+    state.user = u;
+    if (u) { state.folderId = null; await loadNodes(); state.view = 'browser'; }
+    else { state.nodes = []; state.cards = []; state.view = 'auth'; }
+    render();
+  });
+})();
+</script>
+</body>
+</html>
