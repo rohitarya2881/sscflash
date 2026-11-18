@@ -55,6 +55,7 @@ a{color:var(--acc);cursor:pointer;text-decoration:none}
 .badge.md{background:#6c8cff22;color:var(--acc)}
 .badge.lo{background:#8b92b822;color:var(--mute)}
 .src{font-size:12px;color:var(--mute)}
+.sno{font-size:12px;font-weight:600;color:var(--acc);background:#6c8cff1a;padding:3px 8px;border-radius:99px;white-space:nowrap}
 .star{color:var(--gold)!important}
 .overlay{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;padding:14px;z-index:50}
 .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;width:100%;max-width:520px;max-height:92vh;overflow:auto}
@@ -120,7 +121,7 @@ const $app = document.getElementById('app');
 const state = {
   user: null, view: 'auth', authMode: 'login',
   nodes: [], folderId: null,
-  fileId: null, scope: 'file', cards: [],
+  fileId: null, scope: 'file', cards: [], shuffle: null,
   filters: { q: '', priority: 'all', bm: false },
   study: null, prevView: 'file'
 };
@@ -309,10 +310,16 @@ function renderBrowser() {
 
 function applyFilters(cards) {
   const f = state.filters, q = f.q.toLowerCase();
-  return cards.filter(c =>
+  const out = cards.filter(c =>
     (f.priority === 'all' || c.priority === f.priority) &&
     (!f.bm || c.bookmarked) &&
     (!q || c.question.toLowerCase().includes(q) || c.answer.toLowerCase().includes(q)));
+  // Shuffle is view-only: random keys live in memory, nothing is saved to the database
+  if (state.shuffle) {
+    for (const c of out) if (!state.shuffle.has(c.id)) state.shuffle.set(c.id, Math.random());
+    out.sort((a, b) => state.shuffle.get(a.id) - state.shuffle.get(b.id));
+  }
+  return out;
 }
 
 function renderCards() {
@@ -325,6 +332,8 @@ function renderCards() {
       <h2 style="margin:0;font-size:20px">${isFile ? '📄 ' + esc(file?.name || '') : '⭐ Bookmarked cards'}</h2>
       <span class="sp"></span>
       ${isFile ? `<button class="ghost" data-act="addJson">+ Add JSON</button>` : ''}
+      ${state.shuffle ? `<button class="ghost" data-act="unshuf">↩ Original order</button>` : ''}
+      <button class="${state.shuffle ? '' : 'ghost'}" data-act="shuf">🔀 Shuffle</button>
       <button data-act="study">▶ Flashcards</button>
     </div>
     ${isFile ? `<div class="revrow">
@@ -353,9 +362,10 @@ function renderCards() {
 function updateList() {
   const list = applyFilters(state.cards);
   $app.querySelector('#count').textContent = `${list.length} of ${state.cards.length} cards`;
-  $app.querySelector('#list').innerHTML = list.length ? list.map(c => `
+  $app.querySelector('#list').innerHTML = list.length ? list.map((c, i) => `
     <div class="qcard ${c.bookmarked ? 'bm' : ''}">
       <div class="qtop">
+        <span class="sno">${i + 1} / ${list.length}</span>
         <span class="badge ${pcls(c.priority)}">${esc(c.priority)}</span>
         ${state.scope === 'bookmarks' ? `<span class="src">${esc(c.nodes?.name || '')}</span>` : ''}
         <span class="sp"></span>
@@ -475,7 +485,7 @@ function addJson() {
 }
 
 async function openFile(id) {
-  state.fileId = id; state.scope = 'file';
+  state.fileId = id; state.scope = 'file'; state.shuffle = null;
   state.filters = { q: '', priority: 'all', bm: false };
   await loadFileCards(); state.view = 'file'; render();
 }
@@ -509,12 +519,14 @@ document.addEventListener('click', async e => {
       }
       break;
     case 'showBookmarks':
-      state.scope = 'bookmarks'; state.fileId = null;
+      state.scope = 'bookmarks'; state.fileId = null; state.shuffle = null;
       state.filters = { q: '', priority: 'all', bm: false };
       await loadBookmarks(); state.view = 'file'; render();
       break;
     case 'back': state.view = 'browser'; render(); break;
     case 'addJson': addJson(); break;
+    case 'shuf': state.shuffle = new Map(state.cards.map(c => [c.id, Math.random()])); renderCards(); break;
+    case 'unshuf': state.shuffle = null; renderCards(); break;
     case 'reveal': el.nextElementSibling.classList.toggle('hidden'); break;
     case 'bm': {
       const c = state.cards.find(x => x.id === id);
